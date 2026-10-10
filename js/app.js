@@ -1,4 +1,4 @@
-import { DICT, LANG_LABELS, HTML_LANG } from "./i18n.js";
+import { DICT, HTML_LANG } from "./i18n.js";
 import { icon, mascotSvg, PIN_HTML } from "./icons.js";
 import { SOS, PHRASES } from "./sos.js";
 
@@ -213,7 +213,6 @@ function applyStaticText() {
   $("#search").setAttribute("aria-label", t("search.label"));
   $("#search-clear").setAttribute("aria-label", t("search.clear"));
   $("#filters").setAttribute("aria-label", t("filters.label"));
-  $("#lang-select").setAttribute("aria-label", t("header.language"));
   $("#map-locate").setAttribute("aria-label", t("map.locate"));
   $("#view-map").setAttribute("aria-label", t("map.label"));
   $("#bottom-nav").setAttribute("aria-label", t("app.title"));
@@ -260,7 +259,6 @@ function nearestCard(x) {
         <p class="n-meta"><span>${icon("clock")}${esc(statusLabel)}</span>${x.wheelchair ? `<span>${icon("wheelchair")}${esc(t("filters.wheelchair"))}</span>` : ""}</p>
       </div>
     </button>
-    ${state.locStatus === "fallback" ? `<button type="button" class="n-retry press" data-act="locate">${icon("refresh")}${esc(t("list.retryLocation"))}</button>` : ""}
     <div class="n-actions">
       <a class="n-go press" href="${u.kakao}" target="_blank" rel="noreferrer">${icon("nav")}${esc(t("list.startNavigation"))}</a>
       <button type="button" class="n-map press" data-showmap="${esc(x.id)}" aria-label="${esc(t("list.viewOnMap"))}" title="${esc(t("list.viewOnMap"))}">${icon("map")}</button>
@@ -346,7 +344,8 @@ const MAP_NEAR = 10;
 function mapList() {
   const list = filtered();
   const near = state.query.trim() ? list : list.slice(0, MAP_NEAR);
-  const sel = state.selectedId && !near.some((x) => x.id === state.selectedId) ? state.toilets.find((x) => x.id === state.selectedId) : null;
+  const pin = state.selectedId || state.focusId;
+  const sel = pin && !near.some((x) => x.id === pin) ? state.toilets.find((x) => x.id === pin) : null;
   return sel ? [...near, sel] : near;
 }
 function renderMap() {
@@ -357,13 +356,13 @@ function renderMap() {
   map.invalidateSize();
   cluster.clearLayers(); markerById.clear();
   const markers = list.map((x) => {
-    const m = L.marker([x.lat, x.lng], { icon: pinIcon(x.id === state.selectedId), title: x.name, alt: `${x.name} — ${t("map.toiletMarker")}`, keyboard: true });
+    const m = L.marker([x.lat, x.lng], { icon: pinIcon(x.id === state.selectedId || x.id === state.focusId), title: x.name, alt: `${x.name} — ${t("map.toiletMarker")}`, keyboard: true });
     m.on("click", () => select(x.id, false));
     markerById.set(x.id, m);
     return m;
   });
   cluster.addLayers(markers);
-  if (list.length && !state.selectedId) {
+  if (list.length && !state.selectedId && !state.focusId) {
     const b = L.latLngBounds(list.slice(0, 8).map((x) => [x.lat, x.lng])).extend([state.user.lat, state.user.lng]);
     map.fitBounds(b, { padding: [40, 40], maxZoom: 17 });
   }
@@ -406,7 +405,7 @@ function renderFallback() {
     <span class="fb-user" style="left:${u.left}%;top:${u.top}%"></span>
     ${list.map((x, i) => {
       const p = pos(x.lat, x.lng);
-      return `<button type="button" class="fb-pin press${x.id === state.selectedId ? " sel" : ""}${i === 0 ? " first" : ""}" data-open="${esc(x.id)}" style="left:${p.left}%;top:${p.top}%" aria-label="${esc(x.name)} — ${esc(t("map.toiletMarker"))}">${pinSvg}</button>`;
+      return `<button type="button" class="fb-pin press${x.id === state.selectedId || x.id === state.focusId ? " sel" : ""}${i === 0 ? " first" : ""}" data-open="${esc(x.id)}" style="left:${p.left}%;top:${p.top}%" aria-label="${esc(x.name)} — ${esc(t("map.toiletMarker"))}">${pinSvg}</button>`;
     }).join("")}
     <div class="fb-note">${esc(t("map.offline"))} · ${km}km</div>`;
   fb.hidden = false;
@@ -633,6 +632,7 @@ function render() {
 
 function setView(v, keepSelection = false) {
   state.view = v;
+  if (!keepSelection) state.focusId = null;
   if (!keepSelection) state.selectedId = null;
   render();
 }
@@ -646,7 +646,7 @@ document.addEventListener("click", (e) => {
   if (b.dataset.phrase) { openPhrase(+b.dataset.phrase); return; }
   if (b.dataset.open) { select(b.dataset.open); return; }
   if (b.dataset.showmap) {
-    const id = b.dataset.showmap; state.view = "map"; state.selectedId = id; render();
+    const id = b.dataset.showmap; state.view = "map"; state.selectedId = null; state.focusId = id; render();
     const x = state.toilets.find((o) => o.id === id);
     if (x && map) setTimeout(() => focusOnMap(x), 60);
     return;
@@ -707,13 +707,30 @@ $("#map-locate").addEventListener("click", () => {
 });
 $("#map-toast").addEventListener("click", (e) => (e.currentTarget.hidden = true));
 
-const sel = $("#lang-select");
-sel.innerHTML = Object.entries(LANG_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
-sel.value = state.lang;
-sel.addEventListener("change", () => {
-  state.lang = sel.value; store.set(LS.lang, state.lang);
-  applyStaticText(); render();
+
+// ---------- 국기 언어 선택 (윈도우에서도 국기가 보이도록 SVG 사용) ----------
+const FLAG_SVG = {
+  ko: '<svg viewBox="0 0 30 20"><rect width="30" height="20" fill="#fff"/><g transform="translate(15 10)"><circle r="5" fill="#CD2E3A"/><path d="M-5 0a2.5 2.5 0 0 0 5 0a2.5 2.5 0 0 1 5 0a5 5 0 0 1-10 0" fill="#0047A0"/></g><g fill="#000"><rect x="3.2" y="3.4" width="5" height=".9" transform="rotate(-34 5.7 3.85)"/><rect x="3.8" y="4.7" width="5" height=".9" transform="rotate(-34 6.3 5.15)"/><rect x="21.8" y="3.4" width="5" height=".9" transform="rotate(34 24.3 3.85)"/><rect x="21.2" y="4.7" width="5" height=".9" transform="rotate(34 23.7 5.15)"/><rect x="3.2" y="15.6" width="5" height=".9" transform="rotate(34 5.7 16.05)"/><rect x="3.8" y="14.3" width="5" height=".9" transform="rotate(34 6.3 14.75)"/><rect x="21.8" y="15.6" width="5" height=".9" transform="rotate(-34 24.3 16.05)"/><rect x="21.2" y="14.3" width="5" height=".9" transform="rotate(-34 23.7 14.75)"/></g></svg>',
+  en: '<svg viewBox="0 0 30 20"><rect width="30" height="20" fill="#fff"/><g fill="#B22234">' + [0, 2, 4, 6, 8, 10, 12].map((i) => `<rect y="${i * 20 / 13}" width="30" height="${20 / 13}"/>`).join("") + '</g><rect width="13" height="10.8" fill="#3C3B6E"/><g fill="#fff">' + [[2, 2], [5, 2], [8, 2], [11, 2], [3.5, 4.5], [6.5, 4.5], [9.5, 4.5], [2, 7], [5, 7], [8, 7], [11, 7], [3.5, 9.3], [6.5, 9.3], [9.5, 9.3]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r=".55"/>`).join("") + '</g></svg>',
+  zh: '<svg viewBox="0 0 30 20"><rect width="30" height="20" fill="#DE2910"/><path d="M5 2.2l1 3.1h3.3l-2.7 1.9 1 3.1L5 8.4 2.4 10.3l1-3.1L.7 5.3H4z" fill="#FFDE00"/><g fill="#FFDE00"><circle cx="10.5" cy="2.2" r=".8"/><circle cx="12.3" cy="4.2" r=".8"/><circle cx="12.3" cy="7" r=".8"/><circle cx="10.5" cy="9" r=".8"/></g></svg>',
+  ja: '<svg viewBox="0 0 30 20"><rect width="30" height="20" fill="#fff"/><circle cx="15" cy="10" r="6" fill="#BC002D"/></svg>',
+};
+const LANG_NAME = { ko: "한국어", en: "English", zh: "中文", ja: "日本語" };
+const langFlag = (k) => `<span class="flag-ico" aria-hidden="true">${FLAG_SVG[k]}</span>`;
+let langOpen = false;
+function renderLangPick() {
+  const el = $("#lang-pick");
+  el.innerHTML = `<button type="button" class="lang-btn press" data-act="lang" aria-haspopup="listbox" aria-expanded="${langOpen}" aria-label="${esc(t("header.language"))}">${langFlag(state.lang)}<span>${esc(LANG_NAME[state.lang])}</span><b aria-hidden="true">▼</b></button>
+    ${langOpen ? `<ul class="lang-menu" role="listbox">${Object.keys(LANG_NAME).map((k) => `<li><button type="button" role="option" aria-selected="${k === state.lang}" data-lang="${k}">${langFlag(k)}<span>${esc(LANG_NAME[k])}</span>${k === state.lang ? icon("chevron", "ic ok") : ""}</button></li>`).join("")}</ul>` : ""}`;
+}
+renderLangPick();
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("#lang-pick [data-act='lang'], #lang-pick [data-lang]");
+  if (!b) { if (langOpen && !e.target.closest("#lang-pick")) { langOpen = false; renderLangPick(); } return; }
+  if (b.dataset.lang) { state.lang = b.dataset.lang; store.set(LS.lang, state.lang); langOpen = false; renderLangPick(); applyStaticText(); render(); return; }
+  langOpen = !langOpen; renderLangPick();
 });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && langOpen) { langOpen = false; renderLangPick(); } });
 
 // ---------- 화면 전체 확대 방지 (iOS는 user-scalable=no를 무시하므로 직접 막음) ----------
 ["gesturestart", "gesturechange", "gestureend"].forEach((ev) => document.addEventListener(ev, (e) => { if (!e.target.closest || !e.target.closest("#map")) e.preventDefault(); }, { passive: false }));
