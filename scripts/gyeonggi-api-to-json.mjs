@@ -34,14 +34,15 @@ const COLS = {
   hours: ["OPEN_TM_INFO", "OPEN_TM", "개방시간"],
   type: ["PUBLFACLT_DIV_NM", "TOILET_DIV_NM", "DIV_NM", "구분"],
   org: ["MANAGE_INST_NM", "관리기관명"],
-  tel: ["MANAGE_INST_TELNO", "TELNO", "전화번호"],
-  unisex: ["MALE_FEMALE_TOILET_YN", "MLFML_TOILET_YN", "남녀공용화장실여부"],
+  tel: ["MNGINST_TELNO", "MANAGE_INST_TELNO", "TELNO", "전화번호"],
+  unisex: ["MALE_FEMALE_CMNUSE_TOILET_YN", "MALE_FEMALE_TOILET_YN", "MLFML_TOILET_YN", "남녀공용화장실여부"],
   dM: ["MALE_DSPSN_WTRCLS_CNT", "남성용장애인용대변기수"],
   dMU: ["MALE_DSPSN_UIL_CNT", "MALE_DSPSN_URINAL_CNT", "남성용장애인용소변기수"],
   dF: ["FEMALE_DSPSN_WTRCLS_CNT", "여성용장애인용대변기수"],
-  kidM: ["MALE_CHILDUSE_WTRCLS_CNT", "MALE_CHILD_WTRCLS_CNT", "남성용어린이용대변기수"],
-  kidF: ["FEMALE_CHILDUSE_WTRCLS_CNT", "FEMALE_CHILD_WTRCLS_CNT", "여성용어린이용대변기수"],
-  bell: ["EMGNC_BELL_INSTL_YN", "EMERGENCY_BELL_YN", "비상벨설치여부"],
+  kidM: ["MALE_KID_WTRCLS_CNT", "MALE_CHILDUSE_WTRCLS_CNT", "MALE_CHILD_WTRCLS_CNT", "남성용어린이용대변기수"],
+  kidMU: ["MALE_KID_UIL_CNT"],
+  kidF: ["FEMALE_KID_WTRCLS_CNT", "FEMALE_CHILDUSE_WTRCLS_CNT", "FEMALE_CHILD_WTRCLS_CNT", "여성용어린이용대변기수"],
+  bell: ["EMBEL_INSTL_YN", "EMGNC_BELL_INSTL_YN", "EMERGENCY_BELL_YN", "비상벨설치여부"],
   cctv: ["ENTRNC_CCTV_INSTL_YN", "CCTV_INSTL_YN", "화장실입구CCTV설치유무"],
   diaper: ["DIAPER_EXCHG_TABL_YN", "DIAPR_EXCHN_TABL_YN", "기저귀교환대유무"],
   ref: ["DATA_STD_DE", "데이터기준일자"],
@@ -118,9 +119,11 @@ async function main() {
   rows.forEach((r, i) => {
     const lat = Number(g(r, "lat")), lng = Number(g(r, "lng"));
     if (!g(r, "name") || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < 36.85 || lat > 38.35 || lng < 126.3 || lng > 127.9) { skipped++; return; }
-    const hours = g(r, "hours");
+    let hours = g(r, "hours").replace(/\s+/g, " ");
+    if (/^[:~\s-]*$/.test(hours) || hours === "정시") hours = "";
+    if (/^(24시|상시|24시간 개방)$/.test(hours)) hours = "24시간";
     const dis = c.dM || c.dMU || c.dF ? num(r[c.dM]) + num(r[c.dMU]) + num(r[c.dF]) : null;
-    const kid = c.kidM || c.kidF ? num(r[c.kidM]) + num(r[c.kidF]) : null;
+    const kid = c.kidM || c.kidF ? num(r[c.kidM]) + num(r[c.kidMU]) + num(r[c.kidF]) : null;
     if (g(r, "ref") > ref) ref = g(r, "ref");
     toilets.push({
       id: `gg-${i + 1}-${lat.toFixed(5)},${lng.toFixed(5)}`,
@@ -138,7 +141,7 @@ async function main() {
       bell: flag(r, "bell"),
       cctv: flag(r, "cctv"),
       trail: ((g(r, "name") + " " + g(r, "road")).match(/(경기옛길|경기둘레길|둘레길)/) || [null])[0],
-      dong: g(r, "sigun"),
+      dong: g(r, "sigun") || ((g(r, "road") || g(r, "lot")).match(/경기도\s+(\S+?[시군])(?=\s)/) || [])[1] || "",
       type: g(r, "type"),
       org: g(r, "org"),
       tel: g(r, "tel") || null,
