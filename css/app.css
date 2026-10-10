@@ -535,3 +535,9 @@ html, body { touch-action: manipulation; }
 .lang-btn { gap: 6px; height: 40px; padding: 0 10px 0 9px; font-size: 13px; }
 .lang-btn .flag-ico { width: 22px; height: 15px; }
 @media (max-width: 359px) { .lang-btn > span:not(.flag-ico) { display: none; } }
+
+/* 문의하기 */
+.contact-list { display: grid; gap: 8px; margin-top: 14px; }
+.contact-btn { display: flex; align-items: center; gap: 10px; min-height: 48px; border-radius: 14px; border: 1.5px solid var(--line); background: #fff; padding: 0 14px; font-size: 14px; font-weight: 800; color: var(--basalt); word-break: break-all; }
+.contact-btn .ic { width: 18px; height: 18px; flex-shrink: 0; }
+.contact-btn.kakao { background: #FEE500; border-color: #F2D900; color: #191919; }
