@@ -122,72 +122,60 @@ const dirUrls = (x) => {
   };
 };
 
-// ---------- 소리 (또롱이) ----------
-// "장실!" 아기 목소리를 Web Audio로 직접 합성 (MP3 없음).
-// 모음은 오실레이터 + 포먼트 필터, "ㅅ"은 짧은 잡음으로 만듭니다.
-let actx = null;
+// ---------- 소리 (귤랑이) ----------
+// 똥글이 소리: 직접 녹음한 "똥!" (ddong.mp3). 안드로이드·아이폰 모두 같은 소리.
+// Web Audio로 미리 디코딩해 두면 지연 없이 재생되고, 실패하면 <audio> → 음성합성 순으로 대체.
+let actx = null, ddongBuf = null, ddongEl = null, ddongAB = null;
+const DDONG_URL = "ddong.mp3?v=3";
+fetch(DDONG_URL).then((r) => r.arrayBuffer()).then((ab) => { ddongAB = ab; }).catch(() => {});
+function newContext() {
+  try { if (actx && actx.state !== "closed") actx.close(); } catch {}
+  actx = null; ddongBuf = null;
+  try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch { actx = null; }
+}
+function decodeIfNeeded() {
+  if (!actx || ddongBuf || !ddongAB) return;
+  actx.decodeAudioData(ddongAB.slice(0)).then((b) => { ddongBuf = b; }).catch(() => {});
+}
+// 터치할 때마다 소리 장치를 깨워 둠 (앱을 나갔다 오면 iOS·안드로이드가 소리 장치를 멈춰 둠)
 function ensureAudio() {
-  try {
-    if (!actx || actx.state === "closed") actx = new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === "suspended" || actx.state === "interrupted") actx.resume().catch(() => {});
-  } catch { actx = null; }
+  if (!actx || actx.state === "closed" || actx.state === "interrupted") newContext();
+  if (actx && actx.state === "suspended") actx.resume().catch(() => {});
+  decodeIfNeeded();
 }
-function playJangsil() {
+function playElement() {
+  try {
+    if (!ddongEl) { ddongEl = new Audio(DDONG_URL); ddongEl.preload = "auto"; }
+    ddongEl.pause(); ddongEl.currentTime = 0;
+    const p = ddongEl.play();
+    if (p && p.catch) p.catch(() => { ddongEl = null; speakDdong(); });
+  } catch { ddongEl = null; speakDdong(); }
+}
+function playDdong() {
   ensureAudio();
-  if (!actx) return;
-  try {
-    const ctx = actx, t0 = ctx.currentTime + 0.03;
-    const master = ctx.createGain(); master.gain.value = 0.6;
-    const comp = ctx.createDynamicsCompressor();
-    master.connect(comp).connect(ctx.destination);
-    const syllable = (start, dur, f0a, f0b, f0c, formants) => {
-      const env = ctx.createGain();
-      env.gain.setValueAtTime(0.0001, start);
-      env.gain.exponentialRampToValueAtTime(0.9, start + 0.025);
-      env.gain.setValueAtTime(0.9, start + dur * 0.6);
-      env.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-      env.connect(master);
-      const sum = ctx.createGain();
-      formants.forEach(([f, q, g]) => {
-        const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = f; bp.Q.value = q;
-        const fg = ctx.createGain(); fg.gain.value = g;
-        sum.connect(bp).connect(fg).connect(env);
-      });
-      ["sawtooth", "triangle"].forEach((type, i) => {
-        const o = ctx.createOscillator(); o.type = type; o.detune.value = i ? 8 : -8;
-        o.frequency.setValueAtTime(f0a, start);
-        o.frequency.exponentialRampToValueAtTime(f0b, start + dur * 0.35);
-        o.frequency.exponentialRampToValueAtTime(f0c, start + dur);
-        const lfo = ctx.createOscillator(); lfo.frequency.value = 9;
-        const lg = ctx.createGain(); lg.gain.value = 18; lfo.connect(lg).connect(o.frequency);
-        const og = ctx.createGain(); og.gain.value = i ? 0.9 : 0.45;
-        o.connect(og).connect(sum);
-        o.start(start); o.stop(start + dur + 0.05); lfo.start(start); lfo.stop(start + dur + 0.05);
-      });
-    };
-    const hiss = (start, dur) => {
-      const len = Math.floor(ctx.sampleRate * dur), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-      const src = ctx.createBufferSource(); src.buffer = buf;
-      const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 4500;
-      const g = ctx.createGain(); g.gain.value = 0.35;
-      src.connect(hp).connect(g).connect(master); src.start(start);
-    };
-    syllable(t0, 0.24, 620, 780, 690, [[1100, 4, 1], [1900, 6, 0.6], [3200, 8, 0.3]]);        // 장
-    hiss(t0 + 0.27, 0.07);                                                                       // ㅅ
-    syllable(t0 + 0.32, 0.26, 760, 1050, 980, [[420, 5, 0.9], [2900, 7, 0.8], [3600, 9, 0.4]]); // 실!
-    const ch = ctx.createOscillator(), cg = ctx.createGain(); ch.type = "sine";
-    ch.frequency.setValueAtTime(1800, t0 + 0.62); ch.frequency.exponentialRampToValueAtTime(2600, t0 + 0.72);
-    cg.gain.setValueAtTime(0.0001, t0 + 0.62); cg.gain.exponentialRampToValueAtTime(0.18, t0 + 0.64); cg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.78);
-    ch.connect(cg).connect(master); ch.start(t0 + 0.62); ch.stop(t0 + 0.8);
-  } catch {}
+  // 소리 장치가 바로 쓸 수 있는 상태일 때만 Web Audio로, 아니면 <audio>로 확실하게 재생
+  if (actx && actx.state === "running" && ddongBuf) {
+    try { const src = actx.createBufferSource(); src.buffer = ddongBuf; src.connect(actx.destination); src.start(0); return; } catch {}
+  }
+  playElement();
 }
+// 앱으로 돌아오면 멈춘 소리 장치를 새로 준비
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && actx && actx.state !== "running") { try { actx.close(); } catch {} actx = null; }
+  if (document.visibilityState === "visible") { if (actx && actx.state !== "running") { try { actx.close(); } catch {} actx = null; ddongBuf = null; } ddongEl = null; }
 });
+window.addEventListener("pageshow", (e) => { if (e.persisted) { actx = null; ddongBuf = null; ddongEl = null; } });
 
-function playMascot() {
-  playJangsil();
+function speakDdong() {
+  if (!("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance("똥!");
+  u.lang = "ko-KR"; u.pitch = 1.6; u.rate = 1.2;
+  const v = speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith("ko"));
+  if (v) u.voice = v;
+  speechSynthesis.speak(u);
+}
+function playMascot(el) {
+  playDdong();
   $("#live").textContent = t("mascot.sound");
   document.querySelectorAll(".mascot-btn, .mascot-round").forEach((b) => b.classList.add("speaking"));
   document.querySelectorAll(".bubble strong").forEach((s) => (s.textContent = t("mascot.sound")));
@@ -196,15 +184,6 @@ function playMascot() {
     document.querySelectorAll(".bubble strong").forEach((s) => (s.textContent = t("mascot.name")));
     $("#live").textContent = "";
   }, 560);
-  // 지금 열려 있는 가장 가까운 화장실로 바로 이동
-  if (!state.toilets.length) return;
-  const open = state.toilets.filter((x) => isOpenNow(x) === true)
-    .map((x) => ({ x, d: distanceKm(state.user, x) })).sort((a, b) => a.d - b.d)[0];
-  if (!open) { toast(t("mascot.none"), true); return; }
-  state.filter = "openNow"; state.region = "all"; state.query = ""; $("#search").value = ""; $("#search-clear").hidden = true;
-  state.shown = PAGE;
-  render();
-  setTimeout(() => { select(open.x.id); toast(`${t("mascot.found")} · ${travel(open.x).dist}`); }, 420);
 }
 
 // ---------- 토스트 ----------
@@ -362,9 +341,17 @@ function pinIcon(sel) {
   return L.divIcon({ html: PIN_HTML, className: `pin-icon${sel ? " sel" : ""}`, iconSize: [42, 46], iconAnchor: [14, 44] });
 }
 
-function renderMap() {
+// 지도에는 가까운 곳만 (전부 찍으면 너무 빽빽함). 검색 중일 때는 검색 결과 전체.
+const MAP_NEAR = 10;
+function mapList() {
   const list = filtered();
-  $("#map-count").textContent = `${list.length.toLocaleString()} ${t("map.officialCount")}`;
+  const near = state.query.trim() ? list : list.slice(0, MAP_NEAR);
+  const sel = state.selectedId && !near.some((x) => x.id === state.selectedId) ? state.toilets.find((x) => x.id === state.selectedId) : null;
+  return sel ? [...near, sel] : near;
+}
+function renderMap() {
+  const list = mapList();
+  $("#map-count").textContent = state.query.trim() ? `${list.length.toLocaleString()} ${t("map.officialCount")}` : t("map.nearCount").replace("{n}", list.length);
   if (!hasLeaflet()) { renderFallback(); return; }
   initMap();
   map.invalidateSize();
@@ -376,6 +363,10 @@ function renderMap() {
     return m;
   });
   cluster.addLayers(markers);
+  if (list.length && !state.selectedId) {
+    const b = L.latLngBounds(list.slice(0, 8).map((x) => [x.lat, x.lng])).extend([state.user.lat, state.user.lng]);
+    map.fitBounds(b, { padding: [40, 40], maxZoom: 17 });
+  }
   if (userMarker) userMarker.remove();
   userMarker = L.marker([state.user.lat, state.user.lng], { icon: L.divIcon({ html: '<div class="user-dot"></div>', className: "", iconSize: [21, 21], iconAnchor: [10, 10] }), interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(map);
   if (!$("#map-fallback").hidden) renderFallback();
@@ -397,23 +388,27 @@ const fbPos = (lat, lng) => ({
 const HAN_RIVER = [[37.64, 126.66], [37.6, 126.79], [37.565, 126.87], [37.537, 126.925], [37.522, 126.96], [37.515, 126.995], [37.527, 127.03], [37.53, 127.065], [37.52, 127.095], [37.54, 127.13], [37.56, 127.2]];
 function renderFallback() {
   const fb = $("#map-fallback");
-  const list = filtered();
-  const cells = new Map();
-  list.forEach((x) => { const k = `${Math.floor((x.lng - FB.minLng) / 0.03)}:${Math.floor((x.lat - FB.minLat) / 0.025)}`; if (!cells.has(k)) cells.set(k, x); });
-  const picks = [...cells.values()].slice(0, 40);
+  const list = mapList();
+  // 가까운 곳만 보이도록 내 위치와 화장실들을 감싸는 범위로 확대
+  const pts = [...list.map((x) => [x.lat, x.lng]), [state.user.lat, state.user.lng]];
+  let minLat = Math.min(...pts.map((p) => p[0])), maxLat = Math.max(...pts.map((p) => p[0]));
+  let minLng = Math.min(...pts.map((p) => p[1])), maxLng = Math.max(...pts.map((p) => p[1]));
+  const span = Math.max(maxLat - minLat, (maxLng - minLng) * 0.8, 0.006);
+  const cLat = (minLat + maxLat) / 2, cLng = (minLng + maxLng) / 2;
+  minLat = cLat - span * 0.6; maxLat = cLat + span * 0.6; minLng = cLng - span * 0.75; maxLng = cLng + span * 0.75;
+  const pos = (lat, lng) => ({ left: 8 + ((lng - minLng) / (maxLng - minLng)) * 84, top: 20 + ((maxLat - lat) / (maxLat - minLat)) * 62 });
   const pinSvg = PIN_HTML.match(/<svg[\s\S]*?<\/svg>/)[0];
-  const river = HAN_RIVER.map(([la, ln], i) => { const p = fbPos(la, ln); return `${i ? "L" : "M"}${p.left.toFixed(2)} ${p.top.toFixed(2)}`; }).join(" ");
-  const label = (lat, lng, txt, cls = "") => { const p = fbPos(lat, lng); return `<span class="fb-label ${cls}" style="left:${p.left}%;top:${p.top}%">${esc(txt)}</span>`; };
-  const L = { ko: ["서울", "한강", "고양", "성남", "수원"], en: ["SEOUL", "Han River", "Goyang", "Seongnam", "Suwon"], zh: ["首尔", "汉江", "高阳", "城南", "水原"], ja: ["ソウル", "漢江", "高陽", "城南", "水原"] }[state.lang];
-  const u = fbPos(state.user.lat, state.user.lng);
-  fb.innerHTML = `<div class="metro"></div>
+  const river = HAN_RIVER.map(([la, ln], i) => { const p = pos(la, ln); return `${i ? "L" : "M"}${p.left.toFixed(2)} ${p.top.toFixed(2)}`; }).join(" ");
+  const u = pos(state.user.lat, state.user.lng);
+  const km = (span * 111 * 1.2).toFixed(1);
+  fb.innerHTML = `<div class="local-ground"></div>
     <svg class="fb-river" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="${river}"/></svg>
-    ${label(37.6, 126.99, L[0], "big")}${label(37.50, 126.86, L[1], "river")}${label(37.67, 126.78, L[2])}${label(37.42, 127.13, L[3])}${label(37.29, 127.0, L[4])}
-    ${u.left > 0 && u.left < 100 && u.top > 0 && u.top < 100 ? `<span class="fb-user" style="left:${u.left}%;top:${u.top}%"></span>` : ""}
-    ${picks.map((x) => {
-      const p = fbPos(x.lat, x.lng);
-      return `<button type="button" class="fb-pin press${x.id === state.selectedId ? " sel" : ""}" data-open="${esc(x.id)}" style="left:${Math.min(95, Math.max(5, p.left))}%;top:${Math.min(88, Math.max(12, p.top))}%" aria-label="${esc(x.name)} — ${esc(t("map.toiletMarker"))}">${pinSvg}</button>`;
-    }).join("")}<div class="fb-note">${esc(t("map.offline"))}</div>`;
+    <span class="fb-user" style="left:${u.left}%;top:${u.top}%"></span>
+    ${list.map((x, i) => {
+      const p = pos(x.lat, x.lng);
+      return `<button type="button" class="fb-pin press${x.id === state.selectedId ? " sel" : ""}${i === 0 ? " first" : ""}" data-open="${esc(x.id)}" style="left:${p.left}%;top:${p.top}%" aria-label="${esc(x.name)} — ${esc(t("map.toiletMarker"))}">${pinSvg}</button>`;
+    }).join("")}
+    <div class="fb-note">${esc(t("map.offline"))} · ${km}km</div>`;
   fb.hidden = false;
 }
 
@@ -666,7 +661,7 @@ document.addEventListener("click", (e) => {
     toast(t("detail.ratingSaved")); return;
   }
   switch (b.dataset.act) {
-    case "mascot": playMascot(); break;
+    case "mascot": playMascot(b); break;
     case "locate": locate(); break;
     case "more": state.shown += 20; renderList(); break;
     case "close": state.selectedId = null; renderDrawer(); if (map) markerById.forEach((m) => m.setIcon(pinIcon(false))); break;

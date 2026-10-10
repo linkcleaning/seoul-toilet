@@ -86,7 +86,7 @@ async function fetchPage(p) {
 }
 
 async function main() {
-  if (!KEY) { console.error("GG_OPEN_DATA_KEY 환경변수에 경기데이터드림 인증키를 넣어 주세요."); process.exit(1); }
+  if (!KEY) throw new Error("GG_OPEN_DATA_KEY 인증키가 없어요. Settings → Secrets and variables → Actions에 넣어 주세요.");
   const first = await fetchPage(1);
   const rows = [...first.rows];
   for (let p = 2; rows.length < first.total; p++) {
@@ -147,4 +147,10 @@ async function main() {
   console.log(`경기 ${slim.length}곳 저장 (좌표 없음·경기 밖 ${skipped}행 제외) → data/gyeonggi.json`);
   await mergeAll();
 }
-main().catch((e) => { console.error("실패:", e.message); process.exit(1); });
+main().catch((e) => {
+  const why = [e.message, e.cause?.code, e.cause?.message].filter(Boolean).join(" / ");
+  console.error("실패:", why);
+  // GitHub Actions 요약 화면에 바로 보이도록
+  if (process.env.GITHUB_ACTIONS) console.log(`::error title=경기 데이터 받기 실패::${why.replace(/\n/g, " ")}`);
+  process.exit(1);
+});

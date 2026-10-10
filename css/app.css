@@ -98,7 +98,7 @@ main { position: relative; flex: 1; min-height: 0; outline: none; }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .dot.found { background: #59E1BE; } .dot.locating { background: #FFD18B; animation: pulse 1.2s infinite; } .dot.fallback { background: #FF9A73; }
 @keyframes pulse { 50% { opacity: .4; } }
-.mascot-btn { position: relative; display: grid; place-items: end center; width: 62px; height: 62px; flex-shrink: 0; border-radius: 18px; background: #EAF8FE; box-shadow: 0 10px 20px rgba(0,0,0,.18), inset 0 0 0 2px rgba(255,255,255,.2); overflow: visible; }
+.mascot-btn { position: relative; display: grid; place-items: end center; width: 62px; height: 62px; flex-shrink: 0; border-radius: 18px; background: #FFF4E8; box-shadow: 0 10px 20px rgba(0,0,0,.18), inset 0 0 0 2px rgba(255,255,255,.2); overflow: visible; }
 .mascot-btn .mascot-svg { width: 70px; height: 70px; margin-bottom: -2px; }
 .mascot-btn .badge { position: absolute; right: -4px; top: -4px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--hallabong); color: #fff; box-shadow: 0 0 0 2px var(--basalt-2); }
 .mascot-btn .badge .ic { width: 14px; height: 14px; }
@@ -209,7 +209,7 @@ main { position: relative; flex: 1; min-height: 0; outline: none; }
 
 /* Mascot float */
 .mascot-float { pointer-events: none; position: fixed; left: 12px; bottom: calc(88px + var(--safe-b)); z-index: 600; display: flex; align-items: flex-end; gap: 4px; }
-.mascot-round { pointer-events: auto; position: relative; display: grid; place-items: end center; width: 76px; height: 76px; border-radius: 50%; background: #EAF8FE; box-shadow: 0 13px 30px rgba(34,46,56,.22), 0 0 0 4px #fff; overflow: visible; }
+.mascot-round { pointer-events: auto; position: relative; display: grid; place-items: end center; width: 76px; height: 76px; border-radius: 50%; background: #FFF6E8; box-shadow: 0 13px 30px rgba(34,46,56,.22), 0 0 0 4px #fff; overflow: visible; }
 .mascot-round .mascot-svg { width: 88px; height: 88px; margin-bottom: -4px; filter: drop-shadow(0 3px 4px rgba(0,0,0,.12)); }
 .mascot-round .badge { position: absolute; right: -4px; top: -4px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--basalt); color: #fff; box-shadow: 0 0 0 2px #fff; }
 .mascot-round .badge .ic { width: 16px; height: 16px; }
@@ -497,3 +497,6 @@ html, body { touch-action: manipulation; }
 @keyframes leaf { 0%,100% { transform: rotate(0); } 50% { transform: rotate(-8deg); } }
 @keyframes blink { 0%,92%,100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
 @media (prefers-reduced-motion: reduce) { .mascot-svg .leaf-l, .mascot-svg .leaf-r, .mascot-svg .eyes { animation: none; } }
+
+.local-ground { position: absolute; inset: 0; background: linear-gradient(0deg, rgba(23,42,58,.05) 1px, transparent 1px) 0 0 / 100% 48px, linear-gradient(90deg, rgba(23,42,58,.05) 1px, transparent 1px) 0 0 / 48px 100%, #E8F1EE; }
+.fb-pin.first { background: var(--basalt); }
