@@ -73,7 +73,11 @@ function hoursInfo(raw) {
 
 async function fetchPage(p) {
   const url = `${BASE}?KEY=${encodeURIComponent(KEY)}&Type=json&pIndex=${p}&pSize=${PAGE}`;
-  const r = await fetch(url);
+  let r;
+  for (let i = 1; ; i++) {
+    try { r = await fetch(url, { signal: AbortSignal.timeout(30000) }); break; }
+    catch (e) { if (i >= 4) throw e; console.log(`연결 재시도 ${i}…`); await new Promise((ok) => setTimeout(ok, 5000 * i)); }
+  }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const j = await r.json();
   const svc = j[SERVICE];
@@ -98,6 +102,10 @@ async function main() {
   if (!rows.length) { console.error("데이터가 비어 있어요."); process.exit(2); }
 
   const c = resolve(rows[0]);
+  if (process.env.GITHUB_ACTIONS) {
+    const sample = Object.entries(rows[0]).map(([k, v]) => `${k}=${String(v ?? "").slice(0, 20)}`).join(" | ");
+    console.log(`::notice title=경기 API 필드::${sample}`);
+  }
   console.log("찾은 필드:", Object.entries(c).map(([k, v]) => `${k}=${v ?? "없음"}`).join(", "));
   if (!c.name || !c.lat || !c.lng) {
     console.error("\n이름 또는 위도·경도 필드를 못 찾았어요. 실제 필드 목록:\n", Object.keys(rows[0]).join(", "));
