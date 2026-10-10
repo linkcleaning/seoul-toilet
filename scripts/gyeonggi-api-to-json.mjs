@@ -77,7 +77,7 @@ async function fetchPage(p) {
   let r;
   for (let i = 1; ; i++) {
     try { r = await fetch(url, { signal: AbortSignal.timeout(30000) }); break; }
-    catch (e) { if (i >= 4) throw e; console.log(`연결 재시도 ${i}…`); await new Promise((ok) => setTimeout(ok, 5000 * i)); }
+    catch (e) { if (i >= 8) throw e; console.log(`연결 재시도 ${i}/7…`); await new Promise((ok) => setTimeout(ok, 8000 * i)); }
   }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const j = await r.json();
@@ -162,6 +162,8 @@ main().catch((e) => {
   const why = [e.message, e.cause?.code, e.cause?.message].filter(Boolean).join(" / ");
   console.error("실패:", why);
   // GitHub Actions 요약 화면에 바로 보이도록
-  if (process.env.GITHUB_ACTIONS) console.log(`::error title=경기 데이터 받기 실패::${why.replace(/\n/g, " ")}`);
-  process.exit(1);
+  // 경기 서버가 잠깐 응답하지 않아도 지난번 데이터는 그대로 두고 실패로 끝내지 않음
+  const keepOld = /fetch failed|timeout|ECONN|UND_ERR/i.test(why) && process.env.GITHUB_ACTIONS;
+  if (process.env.GITHUB_ACTIONS) console.log(`::${keepOld ? "warning" : "error"} title=경기 데이터 받기 실패::${why.replace(/\n/g, " ")}${keepOld ? " (지난번 데이터 유지, 다음 실행 때 다시 시도)" : ""}`);
+  process.exit(keepOld ? 0 : 1);
 });
