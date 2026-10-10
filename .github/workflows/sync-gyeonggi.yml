@@ -1,0 +1,31 @@
+name: 경기 화장실 데이터 자동 갱신
+
+on:
+  schedule:
+    - cron: "0 18 * * 0"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 경기 API → data/toilets.json
+        env:
+          GG_OPEN_DATA_KEY: ${{ secrets.GG_OPEN_DATA_KEY }}
+        run: node scripts/gyeonggi-api-to-json.mjs
+      - name: 바뀐 내용 커밋
+        run: |
+          git add data/gyeonggi.json data/toilets.json
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git config user.name "toilet-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "경기 데이터 자동 갱신 $(date -u +%Y-%m-%d)"
+          git push
