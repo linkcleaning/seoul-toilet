@@ -532,5 +532,6 @@ html, body { touch-action: manipulation; }
 .flag .n { grid-column: 2; }
 .flag .st { grid-column: 2; justify-self: start; }
 .flag .ic { grid-row: 1 / span 2; }
-.lang-btn > span:not(.flag-ico) { display: none; }
-.lang-btn { padding: 0 12px; }
+.lang-btn { gap: 6px; height: 40px; padding: 0 10px 0 9px; font-size: 13px; }
+.lang-btn .flag-ico { width: 22px; height: 15px; }
+@media (max-width: 359px) { .lang-btn > span:not(.flag-ico) { display: none; } }
