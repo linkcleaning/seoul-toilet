@@ -149,7 +149,7 @@ async function main() {
       provider: "경기",
     });
   });
-  const KEEP_FALSE = new Set(["wheelchair", "diaper", "bell", "cctv", "unisex", "open24h"]);
+  const KEEP_FALSE = new Set(["wheelchair", "diaper", "bell", "cctv", "unisex", "child", "open24h"]);
   const slim = toilets.map((x) => Object.fromEntries(Object.entries(x).filter(([k, v]) => v !== null && v !== "" && (v !== false || KEEP_FALSE.has(k)))));
   await writeFile(OUT, JSON.stringify({
     meta: { provider: "경기", dataset: "경기도 공중화장실 현황 (경기데이터드림 OpenAPI)", sourcePages: ["https://www.data.go.kr/data/15011425/openapi.do"], count: slim.length, referenceDate: ref || new Date().toISOString().slice(0, 10) },
